@@ -16,7 +16,6 @@ package initall
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 )
 
@@ -114,7 +113,7 @@ func (i *initAllOnce) runAll() {
 	// Run the InitializeOnce() for each registrant.
 	for _, e := range i.initCalls {
 		if err := e.InitializeOnce(); err != nil {
-			fmt.Printf("FIX runall: elem returned %v\n", err)
+			// log.Printf("initallonce:runall: elem returned %v\n", err)
 			i.errs = append(i.errs, err)
 		}
 	}
