@@ -2,10 +2,12 @@
 
 Allows multiple components of an application to be initialized once.
 
-Golang has a limitation that once.Do() will only be run once in an application
+Golang has a limitation that a variable of type sync.once can only be run once in an application
 despite being called with different functions. e.g.:
 
 ```go
+var once sync.Once
+
 once.Do(my_A_PackageFunc) 
 once.Do(my_B_PackageFunc) 
 ```
