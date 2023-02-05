@@ -50,14 +50,13 @@ func (o *wine) InitializeOnce() error {
 }
 
 func TestAll(t *testing.T) {
-	initOlives := NewRegistrant()
-	initOlives.Register(&olives{color: "green"})
+	// singleInstance = nil
 
-	initFigs := NewRegistrant()
-	initFigs.Register(&figs{color: "black"})
+	AddRegistrant(&olives{color: "black"}, 10) // Middle priority
 
-	initWine := NewRegistrant()
-	initWine.Register(&wine{color: "red"})
+	AddRegistrant(&figs{color: "green"}, 5) // Lowest priority
+
+	AddRegistrant(&wine{color: "rose"}, 20) // Highest priority
 
 	initMain := NewInitAll()
 
@@ -81,6 +80,18 @@ func TestAll(t *testing.T) {
 
 	errs = initMain.Errors()
 	if errs == nil {
-		t.Fatalf(`Error didnt receive error`)
+		t.Fatalf(`Errors didnt receive error`)
+	}
+
+	if len(errs) != 2 {
+		t.Fatalf("Expected 2 errors, but got %d errors", len(errs))
+	}
+
+	if errs[0] != errOlives {
+		t.Fatalf("Expected highest priority olives: want olives error but got %v", errs[0])
+	}
+
+	if errs[1] != errFigs {
+		t.Fatalf("Expected lowest priority figs: want figs error but got %v", errs[1])
 	}
 }

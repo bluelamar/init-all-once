@@ -16,18 +16,13 @@ package initall
 
 import (
 	"errors"
+	"sort"
 	"sync"
 )
 
 // ComponentInitalizer is the interface that registering components should implement.
 type ComponentInitalizer interface {
 	InitializeOnce() error
-}
-
-// InitRegistrantOnce is the interface used by packages to register themselves.
-type InitRegistrantOnce interface {
-	// Register is called by each module to regiter themselves.
-	Register(compInit ComponentInitalizer)
 }
 
 // InitAllOnce is the interface used by main().
@@ -42,9 +37,21 @@ type InitAllOnce interface {
 	Errors() []error
 }
 
+type componentWithPriority struct {
+	initializer ComponentInitalizer
+	priority    int
+}
+
+// byCompPriority is used to sort the component initializers by priority.
+type byCompPriority []*componentWithPriority
+
+func (a byCompPriority) Len() int           { return len(a) }
+func (a byCompPriority) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a byCompPriority) Less(i, j int) bool { return a[i].priority > a[j].priority }
+
 type initAllOnce struct {
-	initCalls []ComponentInitalizer
-	errs      []error // collect errors into one error
+	initCalls []*componentWithPriority
+	errs      []error // Each component initializer could provide an error.
 	doneOnce  bool
 }
 
@@ -59,13 +66,10 @@ func NewInitAll() InitAllOnce {
 	return newInitAll()
 }
 
-// NewRegistrant is called by each package except main.
+// AddRegistrant will add a component initializer with its relative priority.
 // It should be called by the package/module init() function.
-// Then each package/module must also call Register(compInit ComponentInitalizer).
-func NewRegistrant() InitRegistrantOnce {
-	initWG.Add(1)
-
-	return newInitAll()
+func AddRegistrant(compInit ComponentInitalizer, priority int) {
+	newInitAll().register(compInit, priority)
 }
 
 func newInitAll() *initAllOnce {
@@ -74,7 +78,7 @@ func newInitAll() *initAllOnce {
 
 	if singleInstance == nil {
 		singleInstance = &initAllOnce{
-			initCalls: make([]ComponentInitalizer, 0),
+			initCalls: make([]*componentWithPriority, 0),
 			errs:      make([]error, 0),
 			doneOnce:  false,
 		}
@@ -83,17 +87,17 @@ func newInitAll() *initAllOnce {
 	return singleInstance
 }
 
-// Register is called by registrants to specify their initializer.
-func (i *initAllOnce) Register(compInit ComponentInitalizer) {
-	i.initCalls = append(i.initCalls, compInit)
-	initWG.Done()
+func (i *initAllOnce) register(compInit ComponentInitalizer, priority int) {
+	r := &componentWithPriority{
+		initializer: compInit,
+		priority:    priority,
+	}
+
+	i.initCalls = append(i.initCalls, r)
 }
 
-// RunAllOnce is called by the main fucntion to run all registrants initializers.
+// RunAllOnce is called by the main function to run all registrants initializers.
 func (i *initAllOnce) RunAllOnce() []error {
-	// wait for registrars to finish.
-	initWG.Wait()
-
 	// Ensure we only run all initializers once for the application.
 	lock.Lock()
 	if i.doneOnce == true {
@@ -110,9 +114,12 @@ func (i *initAllOnce) RunAllOnce() []error {
 }
 
 func (i *initAllOnce) runAll() {
-	// Run the InitializeOnce() for each registrant.
+	// Sort the registrants by priority.
+	sort.Sort(byCompPriority(i.initCalls))
+
+	// Run the InitializeOnce() for each registrant in priority order.
 	for _, e := range i.initCalls {
-		if err := e.InitializeOnce(); err != nil {
+		if err := e.initializer.InitializeOnce(); err != nil {
 			// log.Printf("initallonce:runall: elem returned %v\n", err)
 			i.errs = append(i.errs, err)
 		}
