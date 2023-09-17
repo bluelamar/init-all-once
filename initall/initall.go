@@ -110,6 +110,10 @@ func (i *initAllOnce) RunAllOnce() []error {
 
 	i.runAll()
 
+	if len(i.errs) == 0 {
+		return nil
+	}
+
 	return i.errs
 }
 
